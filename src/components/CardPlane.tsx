@@ -127,7 +127,7 @@ export function CardPlane({
       onPointerLeave={onPointerLeave}
       onPointerMove={onPointerMove}
     >
-      <planeGeometry args={[1, 1, 32, 64]} />
+      <planeGeometry args={[1, 1, 64, 64]} />
       <shaderMaterial
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}

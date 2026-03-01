@@ -142,26 +142,28 @@ void main() {
   finalWorldZ += totalBend * uBendZAmount * bendProfile * foldAtten;
   finalWorldY -= totalBend * uBendYCompress * bendProfile * foldAtten;
 
+  // Compute distFromOuter early (needed for ripple suppression + edge mask)
+  float distFromOuter = (uAnchorSide < 0.0) ? xN : 1.0 - xN;
+
   // ============================================================
   // AMBIENT VERTEX RIPPLE (organic breathing, always active)
-  // Uses original world position for scene-coherent movement
+  // Suppressed near outer edge to keep edge curve clean
   // ============================================================
+  float edgeSuppress = smoothstep(0.0, uEdgeWidth * 0.5, distFromOuter);
   float ripple = sin(worldX * 2.0 + worldY * 3.0 + uTime * 0.8) * 0.05;
   ripple += sin(worldX * 5.0 - worldY * 2.0 + uTime * 1.2) * 0.012;
-  finalWorldZ += ripple * foldAtten;
+  finalWorldZ += ripple * foldAtten * edgeSuppress;
 
   // ============================================================
   // EDGE DISTORTION (Y-profiled, one-side only)
   // ============================================================
   float centerCurve = pow(sin(PI * yN_orig), uCenterPow);
-  float distFromOuter = (uAnchorSide < 0.0) ? xN : 1.0 - xN;
 
-  float edgeMask = distFromOuter < uEdgeWidth
-    ? 0.1 + 0.1 * cos(distFromOuter / uEdgeWidth * PI)
-    : 0.0;
+  // Smooth falloff: 1.0 at the outer edge, 0.0 at uEdgeWidth, C1-continuous
+  float edgeMask = 1.0 - smoothstep(0.0, uEdgeWidth, distFromOuter);
 
-  float edgeWave = 0.2 + 0.2 * sin(uTime * 0.4 + yN_orig * 2.0 + uPhaseOffset);
-  float timeMod = mix(0.85, 1.15, edgeWave);
+  // Gentle time breathing (±5%, no high-frequency jitter)
+  float timeMod = 0.95 + 0.05 * sin(uTime * 0.3 + uPhaseOffset);
 
   float edgeAmp = uDistortStrength * centerCurve * edgeMask * timeMod * foldAtten;
   finalWorldZ += edgeAmp;
@@ -180,7 +182,7 @@ void main() {
   vec3 deformedWorld = vec3(worldX, finalWorldY, finalWorldZ);
 
   // Edge X curl in world space
-  deformedWorld.x -= edgeAmp * 0.15 * uAnchorSide;
+  deformedWorld.x -= edgeAmp * 0.03 * uAnchorSide;
 
   vZ = finalWorldZ;
   gl_Position = projectionMatrix * viewMatrix * vec4(deformedWorld, 1.0);
