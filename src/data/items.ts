@@ -11,10 +11,4 @@ export const items: ImageItem[] = [
   { id: '8', src: '/image3.webp', title: 'Phantom Edges', subtitle: 'Interaction Design' },
   { id: '9', src: '/image4.webp', title: 'Waveform', subtitle: 'Sound Design' },
   { id: '10', src: '/image1.webp', title: 'Digital Bloom', subtitle: 'Generative Art' },
-  { id: '11', src: '/image5.avif', title: 'Hollow Light', subtitle: 'Installation' },
-  { id: '12', src: '/image2.webp', title: 'Shifting Planes', subtitle: 'Architecture' },
-  { id: '13', src: '/image3.webp', title: 'Resonance', subtitle: 'Experience Design' },
-  { id: '14', src: '/image4.webp', title: 'Afterglow', subtitle: 'Visual Identity' },
-  { id: '15', src: '/image1.webp', title: 'Temporal Drift', subtitle: 'Film Direction' },
-  { id: '16', src: '/image5.avif', title: 'Void Sequence', subtitle: 'Creative Technology' },
 ]

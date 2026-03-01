@@ -12,23 +12,24 @@ interface WebGLImageGridProps {
 }
 
 const COLS = 2
-const GRID_WIDTH_FRAC = 2.10
+const GRID_WIDTH_FRAC = 0.80
 const GAP_FRAC = 0.04
 const ROW_GAP_FRAC = 0.08
-const INSET_FRAC = 0.10          // 10vh top and bottom padding
+const TOP_PADDING_FRAC = 0.30     // 30vh top padding (first row starts here)
 
-// Scroll-driven bend constants
-const VELOCITY_DEADZONE = 0.5    // ignore velocities below this
-const VELOCITY_RAMP_HIGH = 8.0   // velocity for full bend activation
-const BEND_DAMPING = 0.03        // lerp factor (lower = smoother)
-const MAX_BEND = 0.8             // max deformation clamp
+// Scroll-driven bend constants (velocity wobble, kept)
+const VELOCITY_DEADZONE = 0.5
+const VELOCITY_RAMP_HIGH = 8.0
+const BEND_DAMPING = 0.03
+const MAX_BEND = 0.8
+
+// Scroll offset damping (world-space Y translation)
+const SCROLL_DAMPING = 0.06
+const FOLD_CLEARANCE = 6.5         // extra world units so last card fully folds
 
 // Mouse parallax constants
-const PARALLAX_STRENGTH = 0.6    // max offset in world units
-const PARALLAX_DAMPING = 0.05    // lerp factor (~1s to 95%)
-
-// Z roll during scroll (whole grid shifts backward while cards bend outward)
-const Z_ROLL_STRENGTH = 2.0
+const PARALLAX_STRENGTH = 0.6
+const PARALLAX_DAMPING = 0.05
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
@@ -38,6 +39,7 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 export function WebGLImageGrid({ items }: WebGLImageGridProps) {
   const groupRef = useRef<THREE.Group>(null)
   const bendRef = useRef(0)
+  const scrollOffsetRef = useRef(0)
   const velocityRef = useScrollVelocity()
   const progressRef = useScrollProgress()
   const { camera, size } = useThree()
@@ -45,7 +47,6 @@ export function WebGLImageGrid({ items }: WebGLImageGridProps) {
   // Mouse parallax refs
   const mouseTargetRef = useRef({ x: 0, y: 0 })
   const parallaxRef = useRef({ x: 0, y: 0 })
-  const scrollYRef = useRef(0)
 
   // Global mousemove listener for parallax
   useEffect(() => {
@@ -57,21 +58,28 @@ export function WebGLImageGrid({ items }: WebGLImageGridProps) {
     return () => window.removeEventListener('mousemove', handleMouseMove)
   }, [])
 
-  // Compute grid layout in world-space units with 10vh insets
+  // Compute grid layout in world-space units with top padding
   const layout = useMemo(() => {
     const viewSize = getViewSizeAtDepth(camera as THREE.PerspectiveCamera)
-    const usableHeight = viewSize.height * (1 - 2 * INSET_FRAC) // 80% of viewport
+    const topPadding = viewSize.height * TOP_PADDING_FRAC
 
     const gridWidth = viewSize.width * GRID_WIDTH_FRAC
     const gap = gridWidth * GAP_FRAC
-    let colWidth = (gridWidth - gap) / COLS
-    let cardHeight = colWidth / CARD_ASPECT
+    const colWidth = (gridWidth - gap) / COLS
+    const cardHeight = colWidth / CARD_ASPECT
     const rows = Math.ceil(items.length / COLS)
 
-    let rowGap = cardHeight * ROW_GAP_FRAC
-    let totalGridHeight = rows * cardHeight + (rows - 1) * rowGap
+    const rowGap = cardHeight * ROW_GAP_FRAC
+    const totalGridHeight = rows * cardHeight + (rows - 1) * rowGap
 
-    const overflow = Math.max(0, totalGridHeight - usableHeight)
+    // Grid top sits at 30vh from viewport top
+    const gridTopY = viewSize.height / 2 - topPadding
+
+    // Fold line = grid top (fold starts right where first row sits)
+    const viewportTopY = gridTopY
+
+    // Max scroll: enough for last card to fully fold away
+    const maxScrollWorld = totalGridHeight + FOLD_CLEARANCE
 
     const positions: { x: number; y: number; anchorSide: number }[] = []
 
@@ -84,35 +92,33 @@ export function WebGLImageGrid({ items }: WebGLImageGridProps) {
           ? -(gap / 2 + colWidth / 2)
           : gap / 2 + colWidth / 2
 
-      // Center grid vertically at y=0 (viewport center)
+      // Position rows downward from gridTopY
       const y =
-        totalGridHeight / 2 - cardHeight / 2 - row * (cardHeight + rowGap)
+        gridTopY - cardHeight / 2 - row * (cardHeight + rowGap)
 
       const anchorSide = col === 0 ? -1 : 1
 
       positions.push({ x, y, anchorSide })
     }
 
-    return { positions, colWidth, cardHeight, overflow, totalGridHeight }
+    return { positions, colWidth, cardHeight, totalGridHeight, gridTopY, viewportTopY, maxScrollWorld }
   }, [camera, size.width, size.height, items.length])
 
-  // Animate bend + scroll Y + mouse parallax each frame
+  // Animate bend + scroll offset + mouse parallax each frame
   useFrame(() => {
     const velocity = velocityRef.current
     const progress = progressRef.current
 
-    // --- Scroll bend ---
+    // --- Scroll bend (velocity wobble, kept) ---
     const absVel = Math.abs(velocity)
     const effectiveVel = absVel < VELOCITY_DEADZONE ? 0 : absVel
     const ramp = smoothstep(VELOCITY_DEADZONE, VELOCITY_RAMP_HIGH, effectiveVel)
     const targetBend = Math.min(ramp * MAX_BEND, MAX_BEND)
     bendRef.current += (targetBend - bendRef.current) * BEND_DAMPING
 
-    // --- Scroll Y position ---
-    if (layout.overflow > 0) {
-      const targetScrollY = -layout.overflow / 2 + progress * layout.overflow
-      scrollYRef.current += (targetScrollY - scrollYRef.current) * 0.1
-    }
+    // --- Scroll offset in world units (group moves up as user scrolls) ---
+    const targetOffset = progress * layout.maxScrollWorld
+    scrollOffsetRef.current += (targetOffset - scrollOffsetRef.current) * SCROLL_DAMPING
 
     // --- Mouse parallax ---
     const targetParallaxX = mouseTargetRef.current.x * PARALLAX_STRENGTH
@@ -120,11 +126,10 @@ export function WebGLImageGrid({ items }: WebGLImageGridProps) {
     parallaxRef.current.x += (targetParallaxX - parallaxRef.current.x) * PARALLAX_DAMPING
     parallaxRef.current.y += (targetParallaxY - parallaxRef.current.y) * PARALLAX_DAMPING
 
-    // --- Combine into group position ---
+    // --- Group position: parallax + scroll Y-translation ---
     if (groupRef.current) {
       groupRef.current.position.x = parallaxRef.current.x
-      groupRef.current.position.y = scrollYRef.current + parallaxRef.current.y
-      groupRef.current.position.z = -bendRef.current * Z_ROLL_STRENGTH
+      groupRef.current.position.y = parallaxRef.current.y + scrollOffsetRef.current
     }
   })
 
@@ -142,6 +147,8 @@ export function WebGLImageGrid({ items }: WebGLImageGridProps) {
             bendRef={bendRef}
             cardIndex={index}
             gridHeight={layout.totalGridHeight}
+            gridTopY={layout.gridTopY}
+            viewportTopY={layout.viewportTopY}
           />
         )
       })}

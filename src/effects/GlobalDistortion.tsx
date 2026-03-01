@@ -81,10 +81,10 @@ const fragmentShader = /* glsl */ `
 
 class GlobalDistortionEffect extends Effect {
   constructor({
-    distortStrength = 1.5,
-    noiseStrength = 0.02,
-    waveScale = 4.0,
-    edgeFade = 0.25,
+    distortStrength = 3.0,
+    noiseStrength = 0.010,
+    waveScale = 8.0,
+    edgeFade = 1.25,
   }: {
     distortStrength?: number
     noiseStrength?: number
@@ -107,7 +107,7 @@ export const GlobalDistortion = forwardRef<
   GlobalDistortionEffect,
   { distortStrength?: number; noiseStrength?: number; waveScale?: number; edgeFade?: number }
 >(function GlobalDistortion(
-  { distortStrength = 1.5, noiseStrength = 0.02, waveScale = 4.0, edgeFade = 0.25 },
+  { distortStrength = 4.0, noiseStrength = 0.015, waveScale = 4.0, edgeFade = 0.25 },
   ref
 ) {
   const effect = useMemo(

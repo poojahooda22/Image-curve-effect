@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import type { ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useCardTexture } from '../hooks/useCardTexture'
+import { getViewSizeAtDepth } from '../lib/viewSize'
 
 import vertexShader from '../shaders/card.vert.glsl?raw'
 import fragmentShader from '../shaders/card.frag.glsl?raw'
@@ -13,8 +14,10 @@ interface CardPlaneProps {
   scale: [number, number, number]
   anchorSide: number // -1 = left column, +1 = right column
   bendRef: React.RefObject<number>
-  cardIndex: number  // for per-card phase offset
-  gridHeight: number // total grid height for rolling sheet normalization
+  cardIndex: number    // for per-card phase offset
+  gridHeight: number   // total grid height for normalization
+  gridTopY: number     // top Y of grid in group space
+  viewportTopY: number // fold line Y in world space (viewport top edge)
 }
 
 // Hover damping constants
@@ -29,6 +32,8 @@ export function CardPlane({
   bendRef,
   cardIndex,
   gridHeight,
+  gridTopY,
+  viewportTopY,
 }: CardPlaneProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const canvasTexture = useCardTexture(src)
@@ -57,17 +62,34 @@ export function CardPlane({
       uGridHeight: { value: gridHeight },
       uBendZAmount: { value: 1.5 },
       uBendYCompress: { value: 0.15 },
+      // Cloth fold uniforms
+      uViewportTopY: { value: viewportTopY },
+      uFoldRadius: { value: 2.5 },
+      uMaxFoldAngle: { value: Math.PI * 0.833 },
+      uDipAmount: { value: 0.12 },
+      uViewportHeight: { value: 0 },
+      // Backface correction
+      uBackfaceDarken: { value: 0.85 },
+      uBackContrast: { value: 1.2 },
+      uBackSaturation: { value: 1.1 },
     }),
-    [anchorSide, cardIndex, gridHeight]
+    [anchorSide, cardIndex, gridHeight, gridTopY, viewportTopY]
   )
 
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!meshRef.current) return
     const mat = meshRef.current.material as THREE.ShaderMaterial
     mat.uniforms.uBend.value = bendRef.current
     mat.uniforms.uTime.value += delta
     mat.uniforms.uGridHeight.value = gridHeight
+    mat.uniforms.uViewportTopY.value = viewportTopY
+
+    // Compute viewport height for dip calculation
+    const cam = state.camera as THREE.PerspectiveCamera
+    const viewSize = getViewSizeAtDepth(cam)
+    mat.uniforms.uViewportHeight.value = viewSize.height
+
     if (canvasTexture && mat.uniforms.uTexture.value !== canvasTexture) {
       mat.uniforms.uTexture.value = canvasTexture
     }
@@ -105,7 +127,7 @@ export function CardPlane({
       onPointerLeave={onPointerLeave}
       onPointerMove={onPointerMove}
     >
-      <planeGeometry args={[1, 1, 32, 32]} />
+      <planeGeometry args={[1, 1, 32, 64]} />
       <shaderMaterial
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
