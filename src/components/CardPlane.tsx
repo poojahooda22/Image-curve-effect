@@ -68,10 +68,13 @@ export function CardPlane({
       uMaxFoldAngle: { value: Math.PI * 0.833 },
       uDipAmount: { value: 0.12 },
       uViewportHeight: { value: 0 },
+      uFadeLiftY: { value: 4.0 },
+      uExitRadiusScale: { value: 0.95 },
+      uEdgeRoundness: { value: 0.08 },
       // Backface correction
       uBackfaceDarken: { value: 0.85 },
       uBackContrast: { value: 1.2 },
-      uBackSaturation: { value: 1.1 },
+      uBackSaturation: { value: 0.9 },
     }),
     [anchorSide, cardIndex, gridHeight, gridTopY, viewportTopY]
   )

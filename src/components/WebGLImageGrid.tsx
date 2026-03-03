@@ -14,7 +14,7 @@ interface WebGLImageGridProps {
 const COLS = 2
 const GRID_WIDTH_FRAC = 0.80
 const GAP_FRAC = 0.04
-const ROW_GAP_FRAC = 0.08
+const ROW_GAP_FRAC = 0.18
 const TOP_PADDING_FRAC = 0.30     // 30vh top padding (first row starts here)
 
 // Scroll-driven bend constants (velocity wobble, kept)
